@@ -1,0 +1,19 @@
+rest:
+  build: .
+  restart: always
+  ports:
+    - "5000:5000"
+  links:
+    - mongo
+  command: python ./rest.py
+
+processing:
+  build: .
+  restart: always
+  links:
+    - mongo
+  command: python ./processing.py
+
+mongo:
+  image: mongo
+  restart: always
