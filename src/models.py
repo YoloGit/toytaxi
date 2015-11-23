@@ -18,6 +18,8 @@ db.orders.create_index([
 
 
 class BaseModel:
+    """Just a tiny wrapper for Mongo queries"""
+
     def find_and_set(self, query, updates, sort=None):
         """Atomically find and update document"""
         return self.collection.find_one_and_update(
@@ -41,9 +43,30 @@ class BaseModel:
 class Orders(BaseModel):
     collection = db.orders
 
+    def pick(self):
+        """Atomically pick an order for processing"""
+        return self.find_and_set(
+            {
+                "status": "new",
+                "$or": [
+                    { "pickup_time": { "$lte": datetime.datetime.now() } },
+                    { "pickup_time": None }
+                ]
+            },
+            { "status": "processing" },
+            sort=[("pickup_time", 1)]
+        )
+
 
 class Drivers(BaseModel):
     collection = db.drivers
+
+    def pick(self, order):
+        """Atomically find available driver, assign order"""
+        return self.find_and_set(
+            { "order": None, "location": {"$near": order["location"]} },
+            { "order": order["_id"] }
+        )
 
 
 orders = Orders()

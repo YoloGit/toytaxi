@@ -1,38 +1,16 @@
 import logging
-import datetime
 import time
 from models import drivers, orders
 
-logger = logging.getLogger("taxi-processing")
-
-
-def pick_order():
-    return orders.find_and_set(
-        {
-            "status": "new",
-            "$or": [
-                { "pickup_time": { "$lte": datetime.datetime.now() } },
-                { "pickup_time": None }
-            ]
-        },
-        { "status": "processing" },
-        sort=[("pickup_time", 1)]
-    )
-
-
-def pick_driver(order):
-    return drivers.find_and_set(
-        { "order": None, "location": {"$near": order["location"]} },
-        { "order": order["_id"] }
-    )
+logger = logging.getLogger("processing")
 
 
 def match():
     while True:
-        order = pick_order()
+        order = orders.pick()
         if order:
             logger.info("picked order %s", order)
-            driver = pick_driver(order)
+            driver = drivers.pick(order)
             if driver:
                 logger.info("assigned driver %s", driver)
             else:
