@@ -8,9 +8,11 @@ from bson.objectid import ObjectId
 
 mongo = pymongo.MongoClient(host=os.environ.get("MONGO_HOST"), connect=False)
 db = mongo.taxi
+
 db.drivers.create_index([
     ("location", pymongo.GEO2D)
 ])
+
 db.orders.create_index([
     ("status", pymongo.ASCENDING),
     ("pickup_time", pymongo.ASCENDING)
@@ -34,17 +36,25 @@ class BaseModel:
     def get(self, oid):
         return self.collection.find_one({"_id": ObjectId(oid)})
 
+    def on_set(self, objectid, fields):
+        pass
+
     def set(self, oid, fields):
-        return self.collection.update_one(
-            {"_id": ObjectId(oid)}, { "$set": fields }
+        objectid = ObjectId(oid)
+        self.collection.update_one(
+            {"_id": objectid}, { "$set": fields }
         )
+        self.on_set(objectid, fields)
+
+    def remove_all(self):
+        return self.collection.delete_many({})
 
 
 class Orders(BaseModel):
     collection = db.orders
 
     def pick(self):
-        """Atomically pick an order for processing"""
+        """Atomically pick next order for processing"""
         return self.find_and_set(
             {
                 "status": "new",
@@ -57,6 +67,10 @@ class Orders(BaseModel):
             sort=[("pickup_time", 1)]
         )
 
+    def on_set(self, objectid, fields):
+        if fields.get("status") == "completed":
+            drivers.free(objectid)
+
 
 class Drivers(BaseModel):
     collection = db.drivers
@@ -66,6 +80,12 @@ class Drivers(BaseModel):
         return self.find_and_set(
             { "order": None, "location": {"$near": order["location"]} },
             { "order": order["_id"] }
+        )
+
+    def free(self, order_objectid):
+        return self.find_and_set(
+            { "order": order_objectid },
+            { "order": None }
         )
 
 

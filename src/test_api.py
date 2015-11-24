@@ -1,6 +1,7 @@
+import pytest
 import requests
-import datetime
 import time
+from datetime import datetime, timedelta
 
 HOST = "localhost"
 ORDER_API = "http://%s:5000/orders" % HOST
@@ -27,7 +28,7 @@ class TestDriver:
             upd = self.track(location)
             if "order" in upd:
                 return upd["order"]
-            time.sleep(0.2)
+            time.sleep(0.2) # I know, I know, sleep in tests...
 
 
 class TestOrder:
@@ -50,7 +51,15 @@ class TestOrder:
         return r.json()["status"]
 
 
-def test_ride_now():
+@pytest.fixture
+def clean_setup():
+    # I prefer "clean setup" technique, when everything is deleted *before* test
+    # This way, we have artifacts to play with in case of test failure
+    requests.delete(DRIVER_API).raise_for_status()
+    requests.delete(ORDER_API).raise_for_status()
+
+
+def test_ride_now(clean_setup):
     # create a driver
     driver = TestDriver(location=[-73.944158, 40.678178])
 
@@ -73,10 +82,8 @@ def test_ride_now():
     # driver updates order status to done
     order.update_status("completed")
 
-    # TODO: free car, celanup other stuff
 
-
-def test_ride_wait():
+def test_wait_for_available_car(clean_setup):
     # require a ride
     user_loc = [-73.971249, 40.783060]
     order = TestOrder(
@@ -99,21 +106,55 @@ def test_ride_wait():
     order.update_status("completed")
 
 
-def test_ride_cancel():
+def test_cancel_by_user(clean_setup):
     pass
 
 
-def test_closest_driver():
-    pass
+def test_closest_driver(clean_setup):
+    driver1 = TestDriver(location=[-71.058880, 42.360082])
+    driver2 = TestDriver(location=[-74.005941, 40.712784])
+    order = TestOrder(location=[-73.944158, 40.678178], status="new", uid=100)
+
+    new_order_id = driver2.wait_for_order(location=[-74.005941, 40.712784])
+    assert new_order_id == order.id
+
+    order.update_status("accepted")
+    order.update_status("completed")
 
 
-def test_ride_scheduled():
+def test_one_driver_n_users(clean_setup):
+    location = [-73.944158, 41.678178]
+    order1 = TestOrder(
+        location=location,
+        status="new",
+        uid=100
+    )
+    order2 = TestOrder(
+        location=location,
+        status="new",
+        uid=101,
+        time=(datetime.now()).isoformat()
+    )
+    driver = TestDriver()
+
+    # Pick and complete first order
+    new_order_id = driver.wait_for_order(location)
+    assert new_order_id == order1.id
+    order1.update_status("completed")
+
+    # Pick and complete second order
+    new_order_id = driver.wait_for_order(location)
+    assert new_order_id == order2.id
+    order2.update_status("completed")
+
+
+def test_ride_scheduled(clean_setup):
     # create driver
     driver = TestDriver(location=[-73.944158, 40.678178])
 
-    # require a ride with pickup in 1 sec
+    # require a ride with pickup time in 1 sec
     user_loc = [-73.971249, 40.783060]
-    pickup = datetime.datetime.now()+datetime.timedelta(0, 1)
+    pickup = datetime.now() + timedelta(0, 1)
     order = TestOrder(
         location=user_loc,
         uid=100,
@@ -129,7 +170,7 @@ def test_ride_scheduled():
 
     # Kill me for using sleep in tests,
     # but c'cmon, mocks are hard!
-    time.sleep(1.5)
+    time.sleep(2)
 
     # Driver shoud be assigned by now
     upd = driver.track(user_loc)
