@@ -107,7 +107,20 @@ def test_wait_for_available_car(clean_setup):
 
 
 def test_cancel_by_user(clean_setup):
-    pass
+    driver = TestDriver()
+    order = TestOrder(location=[-73.944158, 40.678178], status="new", uid=100)
+
+    # pick up the order
+    new_order_id = driver.wait_for_order(location=[-71.058880, 42.360082])
+    assert new_order_id == order.id
+
+    # Customer cancels the order
+    order.update_status("canceled")
+
+    # Driver should be free again
+    upd = driver.track(location=[-71.058880, 42.360082])
+    assert not upd["order"]
+
 
 
 def test_closest_driver(clean_setup):

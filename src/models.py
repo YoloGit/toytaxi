@@ -10,7 +10,8 @@ mongo = pymongo.MongoClient(host=os.environ.get("MONGO_HOST"), connect=False)
 db = mongo.taxi
 
 db.drivers.create_index([
-    ("location", pymongo.GEO2D)
+    ("location", pymongo.GEO2D),
+    ("order", pymongo.ASCENDING)
 ])
 
 db.orders.create_index([
@@ -41,9 +42,7 @@ class BaseModel:
 
     def set(self, oid, fields):
         objectid = ObjectId(oid)
-        self.collection.update_one(
-            {"_id": objectid}, { "$set": fields }
-        )
+        self.collection.update_one({"_id": objectid}, { "$set": fields })
         self.on_set(objectid, fields)
 
     def remove_all(self):
@@ -68,7 +67,8 @@ class Orders(BaseModel):
         )
 
     def on_set(self, objectid, fields):
-        if fields.get("status") == "completed":
+        status = fields.get("status")
+        if  status == "completed" or status == "canceled":
             drivers.free(objectid)
 
 
