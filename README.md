@@ -10,7 +10,7 @@ $ pyvenv venv
 $ . venv/bin/activate
 $ pip install -r ./requirements.txt
 $ mongod --config /usr/local/etc/mongod.conf&
-$ ./run-services.sh
+$ cd src && ./run-services.py
 ```
 
 Then you can run tests:

@@ -1,7 +1,12 @@
 import pytest
 import requests
 import time
+
 from datetime import datetime, timedelta
+from multiprocessing import Process
+from concurrent.futures import ProcessPoolExecutor
+from collections import deque
+from random import random
 
 HOST = "localhost"
 ORDER_API = "http://%s:5000/orders" % HOST
@@ -26,8 +31,9 @@ class TestDriver:
     def wait_for_order(self, location):
         while True:
             upd = self.track(location)
-            if "order" in upd:
-                return upd["order"]
+            order_id = upd.get("order")
+            if order_id:
+                return order_id
             time.sleep(0.2) # I know, I know, sleep in tests...
 
 
@@ -191,3 +197,49 @@ def test_ride_scheduled(clean_setup):
 
     order.update_status("accepted")
     order.update_status("completed")
+
+
+def place_orders(norders):
+    loc = [-73.971249, 40.783060]
+    for i in range(norders):
+        time_off = random()
+        pickup_time = (datetime.now() + timedelta(0, time_off)).isoformat()
+        order = TestOrder(
+            location=loc, status="new", uid=i,
+            pickup_time=pickup_time
+        )
+        #print("added order", order.id)
+        time.sleep(0.05)
+
+
+def run_drivers(norders, ndrivers):
+    loc = [-73.971249, 40.783060]
+    drivers = [TestDriver() for i in range(ndrivers)]
+
+    while norders > 0:
+        for driver in drivers:
+            upd = driver.track(location=loc)
+            new_order_id = upd.get("order")
+
+            if not new_order_id:
+                continue
+
+            #print("picked order", new_order_id)
+            url = "%s/%s" % (ORDER_API, new_order_id)
+            r = requests.patch(url, json={"status": "completed"})
+            r.raise_for_status()
+            norders -= 1
+
+
+def test_concurrent(clean_setup):
+    norders = 60
+    ndrivers = 20
+    procs = [
+        Process(target=run_drivers, args=(norders, ndrivers)),
+        Process(target=place_orders, args=(norders,))
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join()
+        assert proc.exitcode == 0
