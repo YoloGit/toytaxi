@@ -99,7 +99,8 @@ def test_wait_for_available_car(clean_setup):
     )
 
     # make sure that the order is new
-    assert order.get_status() == "new"
+    status = order.get_status()
+    assert status == "new" or status == "processing"
 
     # create a driver
     driver = TestDriver(location=user_loc)
