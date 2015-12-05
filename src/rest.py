@@ -8,24 +8,27 @@ app = Flask(__name__)
 def resource(model, id):
     """Common resource wrapper for driver and order"""
 
+    code = 200
+
     if request.method == "PATCH":
         model.set(id, request.get_json())
+        code = 201
 
     result = model.get(id)
     if not result:
         return abort(404)
-    return odump(result)
+    return odump(result), code
 
 
 @app.route('/drivers', methods=["POST", "DELETE"])
 def add_driver():
     if request.method == "POST":
         did = drivers.add(request.get_json())
-        return jsonify(id=str(did))
+        return jsonify(id=str(did)), 201
 
     elif request.method == "DELETE":
         drivers.remove_all()
-        return jsonify()
+        return jsonify(), 204
 
 
 @app.route('/drivers/<did>', methods=["GET", "PATCH"])
@@ -40,11 +43,11 @@ def place_order():
         if "pickup_time" in json:
             json["pickup_time"] = dateutil.parser.parse(json["pickup_time"])
         oid = orders.add(json)
-        return jsonify(id=str(oid))
+        return jsonify(id=str(oid)), 201
 
     elif request.method == "DELETE":
         orders.remove_all()
-        return jsonify()
+        return jsonify(), 204
 
 
 @app.route('/orders/<oid>', methods=["GET", "PATCH"])
